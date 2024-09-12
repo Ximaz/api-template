@@ -17,3 +17,8 @@ export type UserFull = Pick<
   User,
   'id' | 'email' | 'firstname' | 'lastname' | 'last_connection' | 'created_at'
 >;
+
+export type UserAuthentication = Pick<
+  User,
+  'id' | 'email' | 'firstname' | 'lastname' | 'hashed_password'
+>;

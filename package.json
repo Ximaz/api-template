@@ -6,7 +6,7 @@
   "license": "GPL-3.0-only",
   "scripts": {
     "build": "nest build",
-    "prisma:init": "npx --env-file=.env -y prisma migrate dev --name init",
+    "prisma:migrate": "npx --env-file=.env -y prisma migrate dev",
     "prisma:generate": "npx --env-file=.env -y prisma generate",
     "prisma:deploy": "npx --env-file=.env -y prisma migrate deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

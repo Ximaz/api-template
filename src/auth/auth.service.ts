@@ -20,9 +20,8 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto): Promise<Pick<User, 'id'>> {
-    let user: Pick<User, 'id' | 'hashed_password'>;
     try {
-      user = await this.usersService.findUniqueByEmailForAuthentication(
+      await this.usersService.findUniqueByEmailForAuthentication(
         registerDto.email,
       );
       throw new ForbiddenException('Email is already taken.');
@@ -69,9 +68,5 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials.');
 
     return user;
-  }
-
-  async me(payload: Pick<User, 'id'>) {
-    return this.usersService.findUnique(payload.id, false);
   }
 }

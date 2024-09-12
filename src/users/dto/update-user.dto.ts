@@ -1,6 +1,11 @@
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from "class-validator";
 
 export class UpdateUserDto {
+  /* Used to verify that the client confirms the update request. */
+  @IsString()
+  @IsNotEmpty()
+  readonly current_password: string;
+  
   @IsEmail()
   @IsNotEmpty()
   @IsOptional()
@@ -10,10 +15,6 @@ export class UpdateUserDto {
   @IsNotEmpty()
   @IsOptional()
   readonly new_password?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  readonly current_password: string;
 
   @IsString()
   @IsNotEmpty()

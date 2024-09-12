@@ -9,7 +9,7 @@ datasource db {
 
 model users {
   id              String    @unique @default(uuid()) @db.Uuid
-  email           String    @unique
+  email           String    // Can't be @unique for gdpr reasons
   hashed_password String    @map("hashed_password")
   firstname       String
   lastname        String
