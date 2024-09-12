@@ -13,7 +13,6 @@ export class UpdateUserDto {
 
   @IsString()
   @IsNotEmpty()
-  @IsNotEmpty()
   readonly current_password: string;
 
   @IsString()

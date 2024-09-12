@@ -7,19 +7,19 @@ import { Argon2Service } from './argon2/argon2.service';
 import { AuthModule } from './auth/auth.module';
 import { Argon2Module } from './argon2/argon2.module';
 import { AuthService } from './auth/auth.service';
-import { CryptoService } from './crypto/crypto.service';
-import { CryptoModule } from './crypto/crypto.module';
+import { JwtService } from './jwt/jwt.service';
+import { JwtModule } from './jwt/jwt.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
-    CryptoModule,
+    JwtModule,
     Argon2Module,
     AuthModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService, AuthService, Argon2Service, CryptoService],
+  providers: [UsersService, AuthService, Argon2Service, JwtService],
 })
 export class AppModule {}

@@ -2,27 +2,31 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Request } from 'express';
 import { Strategy } from 'passport-strategy';
-import { CryptoService } from 'src/crypto/crypto.service';
-import { User } from 'src/users/user.interface';
+import { JwtService } from '../../jwt/jwt.service';
+import { User } from 'src/users/interfaces/user';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor(private readonly cryptoService: CryptoService) {
+  constructor(private readonly jwtService: JwtService) {
     super();
   }
 
-  async authenticate(req: Request) {
+  private static extractBearerToken(req: Request): string | null {
     const authorization = req.headers['authorization'];
-    if (undefined === authorization)
-      return this.fail(HttpStatus.UNAUTHORIZED);
+    if (undefined === authorization) return null;
 
-    const jweMatch = /^Bearer (.*)$/.exec(authorization);
-    if (null === jweMatch || 2 !== jweMatch.length)
-      return this.fail(HttpStatus.UNAUTHORIZED);
-    const jwe = jweMatch[1];
+    const [bearer, token] = authorization.split(/\s/, 2);
+    if ('bearer' !== bearer.toLowerCase() || undefined === token) return null;
+
+    return token;
+  }
+
+  async authenticate(req: Request) {
+    const jwe = JwtStrategy.extractBearerToken(req);
+    if (null === jwe) return this.fail(HttpStatus.UNAUTHORIZED);
 
     try {
-      const payload = (await this.cryptoService.verifyJwe(jwe)) as Pick<
+      const payload = (await this.jwtService.verifyJwe(jwe)) as Pick<
         User,
         'id'
       >;

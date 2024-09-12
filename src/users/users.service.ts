@@ -1,15 +1,10 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UserFull } from './user.interface';
+import { UserFull, UserShort } from './interfaces/user';
 import { CreateUserDto } from './dto/create-user.dto';
-import { Argon2Service } from 'src/argon2/argon2.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Argon2Service } from 'src/argon2/argon2.service';
 
 @Injectable()
 export class UsersService {
@@ -18,45 +13,57 @@ export class UsersService {
     private readonly argon2Service: Argon2Service,
   ) {}
 
-  async findMany() {
-    return await this.prismaService.users.findMany({
+  findMany() {
+    return this.prismaService.users.findMany({
       select: {
         id: true,
-        email: true,
         firstname: true,
         lastname: true,
-        created_at: true,
       },
     });
   }
 
-  async findUnique(id: string) {
-    const user = await this.prismaService.users.findUnique({
+  findUnique(id: string, grdp: boolean = true) {
+    return this.prismaService.users.findUnique({
       where: { id },
       select: {
-        email: true,
+        email: !grdp,
         firstname: true,
         lastname: true,
-        last_connection: true,
+        last_connection: !grdp,
         created_at: true,
       },
     });
-    if (null === user)
-      throw new NotFoundException('The requested user does not exist.');
-    return user;
   }
 
-  async findUniqueForAuthentication(email: string) {
-    const user = await this.prismaService.users.findUnique({
+  findUniqueByEmailForAuthentication(
+    email: string,
+  ): Promise<UserShort & { hashed_password: string }> {
+    return this.prismaService.users.findUnique({
       where: { email },
       select: {
         id: true,
+        email: true,
+        firstname: true,
+        lastname: true,
         hashed_password: true,
       },
     });
-    if (null === user)
-      throw new NotFoundException('The requested user does not exist.');
-    return user;
+  }
+
+  findUniqueByIDForAuthentication(
+    id: string,
+  ): Promise<UserShort & { hashed_password: string }> {
+    return this.prismaService.users.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        firstname: true,
+        lastname: true,
+        hashed_password: true,
+      },
+    });
   }
 
   create(createDto: CreateUserDto) {
@@ -74,37 +81,37 @@ export class UsersService {
   }
 
   async update(id: string, updateDto: UpdateUserDto): Promise<UserFull> {
-    const _user = await this.prismaService.users.findUnique({
-      where: { id },
-    });
-    if (null === _user)
+    const user = await this.findUniqueByIDForAuthentication(id);
+    if (null === user)
       throw new NotFoundException('The requested user does not exist.');
 
-    if (
-      8 > updateDto.current_password.length ||
-      !(await this.argon2Service.verifyPassword(
-        _user.hashed_password,
-        updateDto.current_password,
-      ))
-    )
-      throw new ForbiddenException('Bad credentials.');
+    const isPasswordMatching = await this.argon2Service.verifyPassword(
+      user.hashed_password,
+      updateDto.current_password,
+    );
+    if (!isPasswordMatching)
+      throw new UnauthorizedException('Invalid credentials.');
 
     const updatedUser = {
-      email: updateDto.email ?? _user.email,
-      firstname: updateDto.firstname ?? _user.firstname,
-      lastname: updateDto.lastname ?? _user.lastname,
-      hashed_password: _user.hashed_password,
+      email: updateDto.email ?? user.email,
+      firstname: updateDto.firstname ?? user.firstname,
+      lastname: updateDto.lastname ?? user.lastname,
+      hashed_password: user.hashed_password,
     };
 
-    if (undefined !== updateDto.new_password)
+    if (undefined !== updateDto.new_password) {
       if (8 > updateDto.new_password.length)
         throw new UnprocessableEntityException(
           'Password must be at least 8 characters long.',
         );
-      else
-        updatedUser.hashed_password = await this.argon2Service.hashPassword(
-          updateDto.new_password,
+
+      if (updateDto.new_password === updateDto.current_password)
+        throw new UnprocessableEntityException(
+          'The new password must be different.',
         );
+
+      updatedUser.hashed_password = await this.argon2Service.hashPassword(updateDto.new_password);
+    }
 
     return await this.prismaService.users.update({
       where: { id },
