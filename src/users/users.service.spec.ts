@@ -7,13 +7,19 @@ import { DeepMockProxy, mockDeep } from 'jest-mock-extended';
 import { PrismaClient } from '@prisma/client';
 import { Argon2Service } from '../argon2/argon2.service';
 
-async function hashPassword(password: string) {
-  return password + '-hashed';
-}
-
-async function verifyPassword(hash: string, password: string) {
-  return hash === (await hashPassword(password));
-}
+const argon2Service: Argon2Service = {
+  hashPassword: jest
+    .fn()
+    .mockImplementation((password: string) =>
+      Promise.resolve(password + '-hashed'),
+    ),
+  verifyPassword: jest
+    .fn()
+    .mockImplementation(
+      async (hash: string, password: string) =>
+        hash === (await argon2Service.hashPassword(password)),
+    ),
+};
 
 function randomPassword() {
   return faker.internet.password({ length: 16, memorable: false });
@@ -63,7 +69,7 @@ async function makeFakeUser(
   return {
     id: faker.string.uuid(),
     email,
-    hashed_password: await hashPassword(password),
+    hashed_password: await argon2Service.hashPassword(password),
     firstname,
     lastname,
     is_admin: isAdmin,
@@ -90,10 +96,6 @@ async function makeDbUsers() {
 describe('UsersService', () => {
   let usersService: UsersService;
   let prismaService: DeepMockProxy<PrismaClient>;
-  const argon2Service: Argon2Service = {
-    hashPassword: jest.fn().mockImplementation(hashPassword),
-    verifyPassword: jest.fn().mockImplementation(verifyPassword),
-  };
 
   beforeEach(async () => {
     prismaService = mockDeep<PrismaClient>();
