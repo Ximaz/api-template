@@ -4,12 +4,12 @@ import {
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { UserAuthentication } from './interfaces/user';
 import { CreateUserDto } from './dto/create-user.dto';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { Argon2Service } from 'src/argon2/argon2.service';
+import { Argon2Service } from '../argon2/argon2.service';
 
 @Injectable()
 export class UsersService {
@@ -89,7 +89,7 @@ export class UsersService {
   async update(
     id: string,
     updateUserDto: UpdateUserDto,
-  ): Promise<UserAuthentication> {
+  ) {
     const user = await this.findUniqueByIDForAuthentication(id);
     if (null === user)
       throw new NotFoundException('The requested user does not exist.');
@@ -127,6 +127,12 @@ export class UsersService {
     return await this.prismaService.users.update({
       where: { id },
       data: updatedUser,
+      select: {
+        email: true,
+        firstname: true,
+        lastname: true,
+        updated_at: true
+      }
     });
   }
 

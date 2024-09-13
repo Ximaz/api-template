@@ -4,10 +4,6 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class Argon2Service {
-  generateSalt() {
-    return randomBytes(16).toString('hex');
-  }
-
   hashPassword(password: string) {
     return argon2.hash(password, {
       type: argon2.argon2id,
