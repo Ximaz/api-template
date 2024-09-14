@@ -1,7 +1,6 @@
 import {
   ForbiddenException,
   Injectable,
-  NotFoundException,
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -20,15 +19,6 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto): Promise<Pick<User, 'id'>> {
-    try {
-      await this.usersService.findUniqueByEmailForAuthentication(
-        registerDto.email,
-      );
-      throw new ForbiddenException('Email is already taken.');
-    } catch (e) {
-      if (!(e instanceof NotFoundException)) throw e;
-    }
-
     if (8 > registerDto.password.length)
       throw new UnprocessableEntityException(
         'Password must be at least 8 characters long.',
@@ -53,7 +43,7 @@ export class AuthService {
     }
   }
 
-  async login(loginDto: LoginDto): Promise<UserShort> {
+  async login(loginDto: LoginDto): Promise<Pick<User, 'id'>> {
     if (8 > loginDto.password.length)
       throw new UnauthorizedException('Invalid credentials.');
 
@@ -69,6 +59,8 @@ export class AuthService {
     if (!isPasswordMatching)
       throw new UnauthorizedException('Invalid credentials.');
 
-    return user;
+    return {
+      id: user.id,
+    };
   }
 }

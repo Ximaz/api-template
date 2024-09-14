@@ -13,7 +13,9 @@ const fakeEnv = {
 };
 
 const configService: Partial<ConfigService> = {
-  get: (property: string): string => fakeEnv[property],
+  get: jest
+    .fn()
+    .mockImplementation((property: string): string => fakeEnv[property]),
 };
 
 function b64decode(s: string): string {
@@ -50,10 +52,13 @@ describe('CryptoService', () => {
             {
               provide: ConfigService,
               useValue: {
-                get: (property: string): string =>
-                  property !== 'JWT_SECRET'
-                    ? fakeEnv[property]
-                    : 'invalidkeylength',
+                get: jest
+                  .fn()
+                  .mockImplementation((property: string): string =>
+                    property !== 'JWT_SECRET'
+                      ? fakeEnv[property]
+                      : 'invalidkeylength',
+                  ),
               },
             },
           ],

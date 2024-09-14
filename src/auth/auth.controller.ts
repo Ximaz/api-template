@@ -14,16 +14,16 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
-    const user = await this.authService.login(loginDto);
-    const jwe = await this.jwtService.forgeJwe({ id: user.id });
+    const { id } = await this.authService.login(loginDto);
+    const jwe = await this.jwtService.forgeJwe({ id });
     return { access_token: jwe };
   }
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() registerDto: RegisterDto) {
-    const user = await this.authService.register(registerDto);
-    const jwe = await this.jwtService.forgeJwe({ id: user.id });
+    const { id } = await this.authService.register(registerDto);
+    const jwe = await this.jwtService.forgeJwe({ id });
     return { access_token: jwe };
   }
 }

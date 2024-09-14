@@ -15,22 +15,12 @@ import {
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 
-const argon2Service: Argon2Service = {
-  hashPassword: jest
-    .fn()
-    .mockImplementation((password: string) =>
-      Promise.resolve(password + '-hashed'),
-    ),
-  verifyPassword: jest
-    .fn()
-    .mockImplementation(
-      async (hash: string, password: string) =>
-        hash === (await argon2Service.hashPassword(password)),
-    ),
-};
-
 function randomPassword() {
   return faker.internet.password({ length: 16, memorable: false });
+}
+
+async function hashPassword(password: string) {
+  return `${password}-hashed`;
 }
 
 function getGdprCompliantUser(user: User) {
@@ -77,7 +67,7 @@ async function makeFakeUser(
   return {
     id: faker.string.uuid(),
     email,
-    hashed_password: await argon2Service.hashPassword(password),
+    hashed_password: await hashPassword(password),
     firstname,
     lastname,
     is_admin: isAdmin,
@@ -105,8 +95,23 @@ describe('UsersService', () => {
   let usersService: UsersService;
   let prismaService: DeepMockProxy<PrismaClient>;
 
+  let argon2Service: Argon2Service;
+
   beforeEach(async () => {
     prismaService = mockDeep<PrismaClient>();
+    argon2Service = {
+      hashPassword: jest
+        .fn()
+        .mockImplementation((password: string) =>
+          Promise.resolve(password + '-hashed'),
+        ),
+      verifyPassword: jest
+        .fn()
+        .mockImplementation(
+          async (hash: string, password: string) =>
+            hash === (await argon2Service.hashPassword(password)),
+        ),
+    };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
@@ -198,9 +203,7 @@ describe('UsersService', () => {
       const expected = [filtered].map(getUserForAuthentication)[0];
       prismaService.users.findUnique.mockResolvedValueOnce(expected as any);
 
-      const user = await usersService.findUniqueByIDForAuthentication(
-        filtered.id,
-      );
+      const user = await usersService.findUniqueByIDForUpdate(filtered.id);
       expect(user).toStrictEqual(expected);
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: filtered.id, deleted_at: null },
@@ -219,9 +222,7 @@ describe('UsersService', () => {
       const filtered = dbUsers.find((user) => null !== user.deleted_at);
       const expected = null;
       prismaService.users.findUnique.mockResolvedValueOnce(expected as any);
-      const user = await usersService.findUniqueByIDForAuthentication(
-        filtered.id,
-      );
+      const user = await usersService.findUniqueByIDForUpdate(filtered.id);
       expect(user).toStrictEqual(expected);
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: filtered.id, deleted_at: null },
@@ -724,7 +725,9 @@ describe('UsersService', () => {
       const invalidID = 'bad user ID';
 
       prismaService.users.update.mockRejectedValueOnce(new NotFoundException());
-      expect(usersService.restore(invalidID)).rejects.toThrow(NotFoundException);
+      expect(usersService.restore(invalidID)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(prismaService.users.update).toHaveBeenCalledWith({
         where: { id: invalidID },
         data: { deleted_at: null },

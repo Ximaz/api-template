@@ -6,7 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserAuthentication } from './interfaces/user';
+import { UserAuthentication, UserShort } from './interfaces/user';
 import { CreateUserDto } from './dto/create-user.dto';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -56,19 +56,17 @@ export class UsersService {
       where: { email, deleted_at: null },
       select: {
         id: true,
-        email: true,
-        firstname: true,
-        lastname: true,
         hashed_password: true,
       },
     });
   }
 
-  findUniqueByIDForAuthentication(id: string): Promise<UserAuthentication> {
+  findUniqueByIDForUpdate(
+    id: string,
+  ): Promise<Omit<UserShort, 'id'> & { hashed_password: string }> {
     return this.prismaService.users.findUnique({
       where: { id, deleted_at: null },
       select: {
-        id: true,
         email: true,
         firstname: true,
         lastname: true,
@@ -94,7 +92,7 @@ export class UsersService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    const user = await this.findUniqueByIDForAuthentication(id);
+    const user = await this.findUniqueByIDForUpdate(id);
     if (null === user) throw new NotFoundException('User not found.');
 
     const isPasswordMatching = await this.argon2Service.verifyPassword(
