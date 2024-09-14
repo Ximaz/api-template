@@ -9,10 +9,11 @@ datasource db {
 
 model users {
   id              String    @unique @default(uuid()) @db.Uuid
-  email           String    @unique
-  hashed_password String    @map("hashed_password")
-  firstname       String
-  lastname        String
+  // IEFT defined the email theorical limit to 254 bytes.
+  email           String    @db.VarChar(254) @unique
+  hashed_password String    @db.VarChar(255) @map("hashed_password")
+  firstname       String    @db.VarChar(255)
+  lastname        String    @db.VarChar(255)
   is_admin        Boolean   @default(false) @map("is_admin")
   last_connection DateTime? @map("last_connection")
   created_at      DateTime  @default(now()) @map("created_at")

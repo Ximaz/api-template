@@ -39,7 +39,7 @@ describe('Argon2idService', () => {
       const [m, t, p] = config.split(/,/).map((v) => +v.slice(2));
 
       expect(alg).toBe('argon2id');
-      expect(+version.slice(2)).toBe(19);
+      expect(+version.slice(2)).toBe(0x13);
       expect(m).toBe(Argon2Service.CONFIG.m);
       expect(t).toBe(Argon2Service.CONFIG.t);
       expect(p).toBe(Argon2Service.CONFIG.p);
