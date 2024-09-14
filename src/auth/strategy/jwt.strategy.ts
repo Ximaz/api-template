@@ -4,7 +4,7 @@ import { Request } from 'express';
 import { Strategy } from 'passport-strategy';
 import { JwtService } from '../../jwt/jwt.service';
 import { User } from 'src/users/interfaces/user';
-import { JWTClaimValidationFailed } from 'jose/dist/types/util/errors';
+import * as jose from 'jose';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -34,7 +34,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       return this.success(payload);
     } catch (e) {
       if (
-        e instanceof JWTClaimValidationFailed &&
+        e instanceof jose.errors.JWTClaimValidationFailed &&
         'iat' === e.claim &&
         'check_failed' === e.reason
       )
