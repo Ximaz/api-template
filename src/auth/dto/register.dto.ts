@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString } from "class-validator";
+import { IsBoolean, IsEmail, IsNotEmpty, IsString } from "class-validator";
 
 export class RegisterDto {
     @IsEmail()
@@ -16,4 +16,7 @@ export class RegisterDto {
     @IsString()
     @IsNotEmpty()
     readonly lastname: string;
+
+    @IsBoolean()
+    readonly has_accepted_terms_and_conditions: boolean;
 }

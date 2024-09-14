@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -53,7 +54,6 @@ export class UsersService {
         firstname: true,
         lastname: true,
         hashed_password: true,
-        deleted_at: true,
       },
     });
   }
@@ -67,13 +67,14 @@ export class UsersService {
         firstname: true,
         lastname: true,
         hashed_password: true,
-        deleted_at: true,
       },
     });
   }
 
-  create(createUserDto: CreateUserDto) {
-    return this.prismaService.users.create({
+  async create(createUserDto: CreateUserDto) {
+    if (!createUserDto.has_accepted_terms_and_conditions)
+      throw new ForbiddenException('User must accept terms and conditions.');
+    return await this.prismaService.users.create({
       data: {
         email: createUserDto.email,
         hashed_password: createUserDto.hashed_password,
@@ -86,10 +87,7 @@ export class UsersService {
     });
   }
 
-  async update(
-    id: string,
-    updateUserDto: UpdateUserDto,
-  ) {
+  async update(id: string, updateUserDto: UpdateUserDto) {
     const user = await this.findUniqueByIDForAuthentication(id);
     if (null === user)
       throw new NotFoundException('The requested user does not exist.');
@@ -131,8 +129,8 @@ export class UsersService {
         email: true,
         firstname: true,
         lastname: true,
-        updated_at: true
-      }
+        updated_at: true,
+      },
     });
   }
 

@@ -6,6 +6,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DeepMockProxy, mockDeep } from 'jest-mock-extended';
 import { PrismaClient } from '@prisma/client';
 import { Argon2Service } from '../argon2/argon2.service';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { ForbiddenException } from '@nestjs/common';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 
 const argon2Service: Argon2Service = {
   hashPassword: jest
@@ -202,7 +206,6 @@ describe('UsersService', () => {
           firstname: true,
           lastname: true,
           hashed_password: true,
-          deleted_at: true,
         },
       });
     });
@@ -224,7 +227,6 @@ describe('UsersService', () => {
           firstname: true,
           lastname: true,
           hashed_password: true,
-          deleted_at: true,
         },
       });
     });
@@ -249,7 +251,6 @@ describe('UsersService', () => {
           firstname: true,
           lastname: true,
           hashed_password: true,
-          deleted_at: true,
         },
       });
     });
@@ -271,9 +272,156 @@ describe('UsersService', () => {
           firstname: true,
           lastname: true,
           hashed_password: true,
-          deleted_at: true,
         },
       });
     });
+  });
+
+  describe('User creation', () => {
+    it('should create a user', async () => {
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
+      const expected = {
+        id: expect.stringMatching(
+          /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/,
+        ),
+      };
+      const createUserDto: CreateUserDto = {
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        hashed_password: user.hashed_password,
+        has_accepted_terms_and_conditions: true,
+      };
+      prismaService.users.create.mockResolvedValueOnce(expected as any);
+
+      const result = await usersService.create(createUserDto);
+      expect(result).toStrictEqual(expected);
+      expect(prismaService.users.create).toHaveBeenCalledWith({
+        data: {
+          email: createUserDto.email,
+          hashed_password: createUserDto.hashed_password,
+          firstname: createUserDto.firstname,
+          lastname: createUserDto.lastname,
+        },
+        select: {
+          id: true,
+        },
+      });
+    });
+
+    it('should not create the user (email taken)', async () => {
+      const dbUsers = await makeDbUsers();
+      const user = dbUsers[0];
+      const createUserDto: CreateUserDto = {
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        hashed_password: user.hashed_password,
+        has_accepted_terms_and_conditions: true,
+      };
+
+      const prismaError = new PrismaClientKnownRequestError(
+        'Email is already taken.',
+        {
+          code: 'P2002',
+          clientVersion: 'NO_CLUE',
+        },
+      );
+      prismaService.users.create.mockRejectedValueOnce(prismaError);
+      expect(usersService.create(createUserDto)).rejects.toStrictEqual(
+        prismaError,
+      );
+    });
+
+    it('should not create the user (did not accept terms and conditions)', async () => {
+      const dbUsers = await makeDbUsers();
+      const user = dbUsers[0];
+      const createUserDto: CreateUserDto = {
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        hashed_password: user.hashed_password,
+        has_accepted_terms_and_conditions: false,
+      };
+
+      const nestException = new ForbiddenException(
+        'User must accept terms and conditions.',
+      );
+      prismaService.users.create.mockRejectedValueOnce(nestException);
+      expect(usersService.create(createUserDto)).rejects.toStrictEqual(
+        nestException,
+      );
+    });
+  });
+
+  describe('User update', () => {
+    it("should update all user's attributes", async () => {
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
+      const updateUserDto: UpdateUserDto = {
+        current_password: 'BadPassword',
+        email: user.email,
+        new_password: 'NewPassword',
+        firstname: 'NotTheSameFirstname',
+        lastname: 'NotTheSameLastname',
+      };
+      const foundUserForAuth = {
+        id: user.id,
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        hashed_password: user.hashed_password,
+      };
+
+      prismaService.users.findUnique.mockResolvedValueOnce(
+        foundUserForAuth as any,
+      );
+      const prismaUpdateResult = {
+        email: updateUserDto.email,
+        firstname: updateUserDto.firstname,
+        lastname: updateUserDto.lastname,
+        updated_at: expect.any(Date),
+      };
+      prismaService.users.update.mockResolvedValueOnce(
+        prismaUpdateResult as any,
+      );
+
+      const updateResult = await usersService.update(user.id, updateUserDto);
+      expect(updateResult).toStrictEqual(prismaUpdateResult);
+      expect(prismaService.users.findUnique).toHaveBeenCalledWith({
+        where: { id: user.id, deleted_at: null },
+        select: {
+          id: true,
+          email: true,
+          firstname: true,
+          lastname: true,
+          hashed_password: true,
+        },
+      });
+
+      const updatedUser = {
+        email: updateUserDto.email ?? user.email,
+        firstname: updateUserDto.firstname ?? user.firstname,
+        lastname: updateUserDto.lastname ?? user.lastname,
+        hashed_password: updateUserDto.new_password
+          ? await argon2Service.hashPassword(updateUserDto.new_password)
+          : user.hashed_password,
+      };
+      expect(prismaService.users.update).toHaveBeenCalledWith({
+        where: { id: user.id },
+        data: updatedUser,
+        select: {
+          email: true,
+          firstname: true,
+          lastname: true,
+          updated_at: true,
+        },
+      });
+    });
+    // it("should update partial user's attributes", async () => {});
+    // it("should update no user's attribute", async () => {});
+    // it('should not update user (not found)', async () => {});
+    // it('should not update user (current password does not match, invalid credentials)', async () => {});
+    // it('should not update user (new password is less than 8 characters)', async () => {});
+    // it('should not update user (new password is the same as the current one)', async () => {});
   });
 });

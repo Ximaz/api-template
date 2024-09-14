@@ -5,10 +5,10 @@ import {
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Argon2Service } from 'src/argon2/argon2.service';
-import { UsersService } from 'src/users/users.service';
+import { Argon2Service } from '../argon2/argon2.service';
+import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
-import { User, UserShort } from 'src/users/interfaces/user';
+import { User, UserShort } from '../users/interfaces/user';
 import { RegisterDto } from './dto/register.dto';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
@@ -43,6 +43,8 @@ export class AuthService {
         hashed_password: hashedPassword,
         firstname: registerDto.firstname,
         lastname: registerDto.lastname,
+        has_accepted_terms_and_conditions:
+          registerDto.has_accepted_terms_and_conditions,
       });
     } catch (e) {
       if (e instanceof PrismaClientKnownRequestError && 'P2002' === e.code)

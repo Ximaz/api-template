@@ -5,7 +5,7 @@ export class UpdateUserDto {
   @IsString()
   @IsNotEmpty()
   readonly current_password: string;
-  
+
   @IsEmail()
   @IsNotEmpty()
   @IsOptional()
