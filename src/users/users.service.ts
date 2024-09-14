@@ -19,6 +19,12 @@ export class UsersService {
     private readonly argon2Service: Argon2Service,
   ) {}
 
+  private static errorHandler(e: any) {
+    if (e instanceof PrismaClientKnownRequestError && 'P2025' === e.code)
+      return new NotFoundException('User not found.');
+    return e;
+  }
+
   findMany() {
     return this.prismaService.users.findMany({
       where: { deleted_at: null },
@@ -89,8 +95,7 @@ export class UsersService {
 
   async update(id: string, updateUserDto: UpdateUserDto) {
     const user = await this.findUniqueByIDForAuthentication(id);
-    if (null === user)
-      throw new NotFoundException('The requested user does not exist.');
+    if (null === user) throw new NotFoundException('User not found.');
 
     const isPasswordMatching = await this.argon2Service.verifyPassword(
       user.hashed_password,
@@ -145,9 +150,7 @@ export class UsersService {
         });
       }
     } catch (e) {
-      if (e instanceof PrismaClientKnownRequestError && 'P2025' === e.code)
-        throw new NotFoundException('The requested item does not exist.');
-      throw e;
+      throw UsersService.errorHandler(e);
     }
   }
 
@@ -158,9 +161,7 @@ export class UsersService {
         data: { deleted_at: null },
       });
     } catch (e) {
-      if (e instanceof PrismaClientKnownRequestError && 'P2025' === e.code)
-        throw new NotFoundException('The requested item does not exist.');
-      throw e;
+      throw UsersService.errorHandler(e);
     }
   }
 }

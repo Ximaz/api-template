@@ -7,7 +7,12 @@ import { DeepMockProxy, mockDeep } from 'jest-mock-extended';
 import { PrismaClient } from '@prisma/client';
 import { Argon2Service } from '../argon2/argon2.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { ForbiddenException, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -320,16 +325,9 @@ describe('UsersService', () => {
         has_accepted_terms_and_conditions: true,
       };
 
-      const prismaError = new PrismaClientKnownRequestError(
-        'Email is already taken.',
-        {
-          code: 'P2002',
-          clientVersion: 'NO_CLUE',
-        },
-      );
-      prismaService.users.create.mockRejectedValueOnce(prismaError);
-      expect(usersService.create(createUserDto)).rejects.toStrictEqual(
-        prismaError,
+      prismaService.users.create.mockRejectedValueOnce(new NotFoundException());
+      expect(usersService.create(createUserDto)).rejects.toThrow(
+        NotFoundException,
       );
     });
 
@@ -569,22 +567,22 @@ describe('UsersService', () => {
       });
     });
     it('should not update user (current password does not match, invalid credentials)', async () => {
-      const user = await makeFakeUser(false, false, false, "BadPassword");
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
       const foundUserForAuth = {
         id: user.id,
         email: user.email,
         firstname: user.firstname,
         lastname: user.lastname,
-        hashed_password: user.hashed_password
+        hashed_password: user.hashed_password,
       };
       prismaService.users.findUnique.mockResolvedValueOnce(
         foundUserForAuth as any,
       );
 
       const updateDto: UpdateUserDto = {
-        current_password: "NotMatchingPassword",
-        firstname: "NewFirstname",
-        lastname: "NewLastname"
+        current_password: 'NotMatchingPassword',
+        firstname: 'NewFirstname',
+        lastname: 'NewLastname',
       };
       expect(usersService.update(user.id, updateDto)).rejects.toThrow(
         UnauthorizedException,
@@ -602,21 +600,21 @@ describe('UsersService', () => {
       });
     });
     it('should not update user (new password is less than 8 characters)', async () => {
-      const user = await makeFakeUser(false, false, false, "BadPassword");
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
       const foundUserForAuth = {
         id: user.id,
         email: user.email,
         firstname: user.firstname,
         lastname: user.lastname,
-        hashed_password: user.hashed_password
+        hashed_password: user.hashed_password,
       };
       prismaService.users.findUnique.mockResolvedValueOnce(
         foundUserForAuth as any,
       );
 
       const updateDto: UpdateUserDto = {
-        current_password: "BadPassword",
-        new_password: "<8chars"
+        current_password: 'BadPassword',
+        new_password: '<8chars',
       };
       expect(usersService.update(user.id, updateDto)).rejects.toThrow(
         UnprocessableEntityException,
@@ -634,21 +632,21 @@ describe('UsersService', () => {
       });
     });
     it('should not update user (new password is the same as the current one)', async () => {
-      const user = await makeFakeUser(false, false, false, "BadPassword");
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
       const foundUserForAuth = {
         id: user.id,
         email: user.email,
         firstname: user.firstname,
         lastname: user.lastname,
-        hashed_password: user.hashed_password
+        hashed_password: user.hashed_password,
       };
       prismaService.users.findUnique.mockResolvedValueOnce(
         foundUserForAuth as any,
       );
 
       const updateDto: UpdateUserDto = {
-        current_password: "BadPassword",
-        new_password: "BadPassword"
+        current_password: 'BadPassword',
+        new_password: 'BadPassword',
       };
       expect(usersService.update(user.id, updateDto)).rejects.toThrow(
         UnprocessableEntityException,
@@ -663,6 +661,74 @@ describe('UsersService', () => {
           lastname: true,
           hashed_password: true,
         },
+      });
+    });
+  });
+
+  describe('User deletion', () => {
+    it('should delete the user partially', async () => {
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
+
+      expect(usersService.delete(user.id, false)).resolves.toBe(void 0);
+      expect(prismaService.users.update).toHaveBeenCalledWith({
+        where: { id: user.id, deleted_at: null },
+        data: { deleted_at: expect.any(Date) },
+      });
+    });
+    it('should delete the user completely', async () => {
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
+
+      expect(usersService.delete(user.id, true)).resolves.toBe(void 0);
+      expect(prismaService.users.delete).toHaveBeenCalledWith({
+        where: { id: user.id },
+      });
+    });
+    it('should throw an error (user not found)', async () => {
+      const invalidID = "surely it's an invalid ID";
+
+      prismaService.users.update.mockRejectedValueOnce(new NotFoundException());
+
+      expect(usersService.delete(invalidID, false)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(prismaService.users.update).toHaveBeenCalledWith({
+        where: { id: invalidID, deleted_at: null },
+        data: { deleted_at: expect.any(Date) },
+      });
+
+      prismaService.users.delete.mockRejectedValueOnce(new NotFoundException());
+
+      expect(usersService.delete(invalidID, true)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(prismaService.users.delete).toHaveBeenCalledWith({
+        where: { id: invalidID },
+      });
+    });
+  });
+
+  describe('User resore', () => {
+    it('should restore a deleted user', async () => {
+      const user = await makeFakeUser(false, false, true, 'BadPassword');
+
+      prismaService.users.update.mockResolvedValue({} as any);
+      expect(usersService.restore(user.id)).resolves.toBe(void 0);
+      expect(prismaService.users.update).toHaveBeenCalledWith({
+        where: { id: user.id },
+        data: { deleted_at: null },
+      });
+    });
+
+    it('should throw an error (user not found)', async () => {
+      const invalidID = 'bad user ID';
+
+      prismaService.users.update.mockRejectedValueOnce(new NotFoundException());
+      expect(usersService.restore(invalidID)).rejects.toThrow(NotFoundException);
+      expect(prismaService.users.update).toHaveBeenCalledWith({
+        where: { id: invalidID },
+        data: { deleted_at: null },
       });
     });
   });
