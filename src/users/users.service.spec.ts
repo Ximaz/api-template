@@ -6,7 +6,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DeepMockProxy, mockDeep } from 'jest-mock-extended';
 import { PrismaClient } from '@prisma/client';
 import { Argon2Service } from '../argon2/argon2.service';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import {
   ForbiddenException,
   NotFoundException,
@@ -287,7 +286,7 @@ describe('UsersService', () => {
       const user = await makeFakeUser(false, false, false, 'BadPassword');
       const expected = {
         id: expect.stringMatching(
-          /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/,
+          /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
         ),
       };
       const createUserDto: CreateUserDto = {

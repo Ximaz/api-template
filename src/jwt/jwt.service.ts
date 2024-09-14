@@ -17,38 +17,42 @@ export class JwtService {
   private secret: Uint8Array;
   private issuer: string;
   private expiresIn: number;
+  private jwtRSAPublicKeyPath: string;
   private publicKey: KeyLike | null = null;
+  private jwtRSAPrivateKeyPath: string;
   private privateKey: KeyLike | null = null;
-  private static JWS_ALG: string = 'HS512';
-  private static JWE_ALG: string = 'RSA-OAEP-512';
-  private static JWE_ENC: string = 'A256GCM';
+  public static JWS_ALG: string = 'HS512';
+  public static JWE_ALG: string = 'RSA-OAEP-512';
+  public static JWE_ENC: string = 'A256GCM';
 
   constructor(private readonly configService: ConfigService) {
     const secret = this.configService.get<string>('JWT_SECRET');
+    this.issuer = this.configService.get<string>('JWT_ISSUER');
+    this.expiresIn = parseInt(this.configService.get<string>('JWT_EXPIRES_IN'));
+    this.jwtRSAPublicKeyPath = this.configService.get<string>(
+      'JWT_RSA_PUBLIC_KEY_PATH',
+    );
+    this.jwtRSAPrivateKeyPath = this.configService.get<string>(
+      'JWT_RSA_PRIVATE_KEY_PATH',
+    );
     if (32 !== secret.length)
       throw new Error('The JWS secret key must be 32 bytes long.');
     this.secret = new TextEncoder().encode(secret);
-    this.issuer = this.configService.get<string>('JWT_ISSUER');
-    this.expiresIn =
-      parseInt(this.configService.get<string>('JWT_EXPIRES_IN'));
   }
 
   private async getKeyPair() {
-    const publicKey = readFileSync(
-      this.configService.get<string>('JWT_RSA_PUBLIC_KEY_PATH'),
-      { encoding: 'utf-8' },
-    );
-    const privateKey = readFileSync(
-      this.configService.get<string>('JWT_RSA_PRIVATE_KEY_PATH'),
-      { encoding: 'utf-8' },
-    );
+    const publicKey = readFileSync(this.jwtRSAPublicKeyPath, {
+      encoding: 'utf-8',
+    });
+    const privateKey = readFileSync(this.jwtRSAPrivateKeyPath, {
+      encoding: 'utf-8',
+    });
     this.privateKey = await importPKCS8(privateKey, JwtService.JWE_ALG);
     this.publicKey = await importSPKI(publicKey, JwtService.JWE_ALG);
   }
 
-  private async loadKeysIfNull() {
-    if (null === this.publicKey || null === this.privateKey)
-      await this.getKeyPair();
+  public areKeysLoaded() {
+    return null !== this.publicKey && null !== this.privateKey;
   }
 
   async forgeJwe(payload: JWTPayload): Promise<string> {
@@ -61,7 +65,7 @@ export class JwtService {
       .sign(this.secret);
     const encodedJws = new TextEncoder().encode(jws);
 
-    await this.loadKeysIfNull();
+    if (!this.areKeysLoaded()) await this.getKeyPair();
     const jwe = await new CompactEncrypt(encodedJws)
       .setProtectedHeader({
         alg: JwtService.JWE_ALG,
@@ -72,8 +76,11 @@ export class JwtService {
     return jwe;
   }
 
-  async verifyJwe(jwe: string): Promise<object> {
-    await this.loadKeysIfNull();
+  async verifyJwe(
+    jwe: string,
+    checkExpiration: boolean = true,
+  ): Promise<object> {
+    if (!this.areKeysLoaded()) await this.getKeyPair();
     const { plaintext: encodedJws } = await compactDecrypt(
       jwe,
       this.privateKey,
@@ -87,7 +94,7 @@ export class JwtService {
     const { payload } = await jwtVerify(jws, this.secret, {
       issuer: this.issuer,
       algorithms: [JwtService.JWS_ALG],
-      maxTokenAge: this.expiresIn,
+      maxTokenAge: checkExpiration ? this.expiresIn : undefined,
     });
 
     return payload;
