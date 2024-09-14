@@ -7,8 +7,8 @@ import * as jose from 'jose';
 const fakeEnv = {
   JWT_ISSUER: 'rest-api-unit-tests',
   JWT_SECRET: '5044d47226c19a4d63fd7eab79373b30',
-  JWT_RSA_PUBLIC_KEY_PATH: '.public_key.pem',
-  JWT_RSA_PRIVATE_KEY_PATH: '.private_key.pem',
+  JWT_RSA_PUBLIC_KEY_PATH: 'test/.public_key.pem',
+  JWT_RSA_PRIVATE_KEY_PATH: 'test/.private_key.pem',
   JWT_EXPIRES_IN: '60s',
 };
 
