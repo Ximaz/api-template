@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
   UnprocessableEntityException,
@@ -7,9 +6,8 @@ import {
 import { Argon2Service } from '../argon2/argon2.service';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
-import { User, UserShort } from '../users/interfaces/user';
+import { User } from '../users/interfaces/user';
 import { RegisterDto } from './dto/register.dto';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class AuthService {
@@ -27,20 +25,14 @@ export class AuthService {
       registerDto.password,
     );
 
-    try {
-      return await this.usersService.create({
-        email: registerDto.email,
-        hashed_password: hashedPassword,
-        firstname: registerDto.firstname,
-        lastname: registerDto.lastname,
-        has_accepted_terms_and_conditions:
-          registerDto.has_accepted_terms_and_conditions,
-      });
-    } catch (e) {
-      if (e instanceof PrismaClientKnownRequestError && 'P2002' === e.code)
-        throw new ForbiddenException('Email is already taken.');
-      throw e;
-    }
+    return await this.usersService.create({
+      email: registerDto.email,
+      hashed_password: hashedPassword,
+      firstname: registerDto.firstname,
+      lastname: registerDto.lastname,
+      has_accepted_terms_and_conditions:
+        registerDto.has_accepted_terms_and_conditions,
+    });
   }
 
   async login(loginDto: LoginDto): Promise<Pick<User, 'id'>> {
