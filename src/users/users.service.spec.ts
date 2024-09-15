@@ -817,9 +817,8 @@ describe('UsersService', () => {
 
   describe('error handler', () => {
     it('should return an error which is not P2025', async () => {
-      prismaService.users.findUnique.mockResolvedValueOnce(
-        await makeFakeUser(false, false, false, 'password'),
-      );
+      const user = await makeFakeUser(false, false, false, 'password');
+      prismaService.users.findUnique.mockResolvedValueOnce(user);
       prismaService.users.update.mockRejectedValueOnce(
         new PrismaClientKnownRequestError('Unexpected error', {
           code: 'P1000',
@@ -827,11 +826,35 @@ describe('UsersService', () => {
         }),
       );
       try {
-        await usersService.update('id', { current_password: 'password' });
+        await usersService.update(user.id, { current_password: 'password' });
         fail();
       } catch (e) {
         expect(e).toBeInstanceOf(PrismaClientKnownRequestError);
       }
+      expect(prismaService.users.findUnique).toHaveBeenCalledWith({
+        where: { id: user.id, deleted_at: null },
+        select: {
+          email: true,
+          firstname: true,
+          lastname: true,
+          hashed_password: true,
+        },
+      });
+      expect(prismaService.users.update).toHaveBeenCalledWith({
+        where: { id: user.id },
+        data: {
+          email: user.email,
+          firstname: user.firstname,
+          lastname: user.lastname,
+          hashed_password: user.hashed_password,
+        },
+        select: {
+          email: true,
+          firstname: true,
+          lastname: true,
+          updated_at: true,
+        },
+      });
     });
   });
 });
