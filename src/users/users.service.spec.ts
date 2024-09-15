@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 function randomPassword() {
   return faker.internet.password({ length: 16, memorable: false });
@@ -44,11 +45,7 @@ function getUserShort(user: User) {
 function getUserForAuthentication(user: User) {
   return {
     id: user.id,
-    email: user.id,
-    firstname: user.firstname,
-    lastname: user.lastname,
     hashed_password: user.hashed_password,
-    deleted_at: user.deleted_at,
   };
 }
 
@@ -123,10 +120,6 @@ describe('UsersService', () => {
     usersService = module.get<UsersService>(UsersService);
   });
 
-  it('should be defined', () => {
-    expect(usersService).toBeDefined();
-  });
-
   describe('findMany', () => {
     it('should return the list of users', async () => {
       const dbUsers = await makeDbUsers();
@@ -152,24 +145,61 @@ describe('UsersService', () => {
   });
 
   describe('findUnique', () => {
-    it("should return the user by it's ID", async () => {
-      const gdprCompliance = false;
+    it("should return the full user by it's ID", async () => {
       const dbUsers = await makeDbUsers();
       const filtered = dbUsers[0];
-      const expected = [filtered].map(
-        !gdprCompliance ? getUserShort : getGdprCompliantUser,
-      )[0];
+      const expected = [filtered].map(getUserShort)[0];
       prismaService.users.findUnique.mockResolvedValueOnce(expected as any);
 
-      const user = await usersService.findUnique(filtered.id, gdprCompliance);
+      const user = await usersService.findUnique(filtered.id, false);
       expect(user).toStrictEqual(expected);
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: filtered.id, deleted_at: null },
         select: {
-          email: !gdprCompliance,
+          email: true,
           firstname: true,
           lastname: true,
-          last_connection: !gdprCompliance,
+          last_connection: true,
+          created_at: true,
+        },
+      });
+    });
+
+    it("should return the partial user by it's ID", async () => {
+      const dbUsers = await makeDbUsers();
+      const filtered = dbUsers[0];
+      const expected = [filtered].map(getGdprCompliantUser)[0];
+      prismaService.users.findUnique.mockResolvedValueOnce(expected as any);
+
+      const user = await usersService.findUnique(filtered.id, true);
+      expect(user).toStrictEqual(expected);
+      expect(prismaService.users.findUnique).toHaveBeenCalledWith({
+        where: { id: filtered.id, deleted_at: null },
+        select: {
+          email: false,
+          firstname: true,
+          lastname: true,
+          last_connection: false,
+          created_at: true,
+        },
+      });
+    });
+
+    it("should return the partial user by it's ID (default GDPR value)", async () => {
+      const dbUsers = await makeDbUsers();
+      const filtered = dbUsers[0];
+      const expected = [filtered].map(getGdprCompliantUser)[0];
+      prismaService.users.findUnique.mockResolvedValueOnce(expected as any);
+
+      const user = await usersService.findUnique(filtered.id);
+      expect(user).toStrictEqual(expected);
+      expect(prismaService.users.findUnique).toHaveBeenCalledWith({
+        where: { id: filtered.id, deleted_at: null },
+        select: {
+          email: false,
+          firstname: true,
+          lastname: true,
+          last_connection: false,
           created_at: true,
         },
       });
@@ -208,7 +238,6 @@ describe('UsersService', () => {
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: filtered.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -227,7 +256,6 @@ describe('UsersService', () => {
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: filtered.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -252,9 +280,6 @@ describe('UsersService', () => {
         where: { email: filtered.email, deleted_at: null },
         select: {
           id: true,
-          email: true,
-          firstname: true,
-          lastname: true,
           hashed_password: true,
         },
       });
@@ -273,9 +298,6 @@ describe('UsersService', () => {
         where: { email: filtered.email, deleted_at: null },
         select: {
           id: true,
-          email: true,
-          firstname: true,
-          lastname: true,
           hashed_password: true,
         },
       });
@@ -325,10 +347,20 @@ describe('UsersService', () => {
         has_accepted_terms_and_conditions: true,
       };
 
-      prismaService.users.create.mockRejectedValueOnce(new NotFoundException());
-      expect(usersService.create(createUserDto)).rejects.toThrow(
-        NotFoundException,
+      prismaService.users.create.mockRejectedValueOnce(
+        new PrismaClientKnownRequestError(
+          'Unique constraint failed on the email',
+          { code: 'P2002', clientVersion: 'NO_CLUE' },
+        ),
       );
+      try {
+        await usersService.create(createUserDto);
+        fail();
+      } catch (e) {
+        expect(e).toStrictEqual(
+          new ForbiddenException('Email is already taken.'),
+        );
+      }
     });
 
     it('should not create the user (did not accept terms and conditions)', async () => {
@@ -346,9 +378,12 @@ describe('UsersService', () => {
         'User must accept terms and conditions.',
       );
       prismaService.users.create.mockRejectedValueOnce(nestException);
-      expect(usersService.create(createUserDto)).rejects.toStrictEqual(
-        nestException,
-      );
+      try {
+        await usersService.create(createUserDto);
+        fail();
+      } catch (e) {
+        expect(e).toStrictEqual(nestException);
+      }
     });
   });
 
@@ -399,7 +434,6 @@ describe('UsersService', () => {
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: user.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -464,7 +498,6 @@ describe('UsersService', () => {
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: user.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -526,7 +559,6 @@ describe('UsersService', () => {
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: user.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -551,14 +583,16 @@ describe('UsersService', () => {
         foundUserForAuth as any,
       );
 
-      expect(usersService.update(invalidID, {} as any)).rejects.toThrow(
-        NotFoundException,
-      );
+      try {
+        await usersService.update(invalidID, {} as any);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(NotFoundException);
+      }
 
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: invalidID, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -584,14 +618,17 @@ describe('UsersService', () => {
         firstname: 'NewFirstname',
         lastname: 'NewLastname',
       };
-      expect(usersService.update(user.id, updateDto)).rejects.toThrow(
-        UnauthorizedException,
-      );
+
+      try {
+        await usersService.update(user.id, updateDto);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(UnauthorizedException);
+      }
 
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: user.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -616,14 +653,17 @@ describe('UsersService', () => {
         current_password: 'BadPassword',
         new_password: '<8chars',
       };
-      expect(usersService.update(user.id, updateDto)).rejects.toThrow(
-        UnprocessableEntityException,
-      );
+
+      try {
+        await usersService.update(user.id, updateDto);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(UnprocessableEntityException);
+      }
 
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: user.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -648,14 +688,17 @@ describe('UsersService', () => {
         current_password: 'BadPassword',
         new_password: 'BadPassword',
       };
-      expect(usersService.update(user.id, updateDto)).rejects.toThrow(
-        UnprocessableEntityException,
-      );
+
+      try {
+        await usersService.update(user.id, updateDto);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(UnprocessableEntityException);
+      }
 
       expect(prismaService.users.findUnique).toHaveBeenCalledWith({
         where: { id: user.id, deleted_at: null },
         select: {
-          id: true,
           email: true,
           firstname: true,
           lastname: true,
@@ -669,7 +712,18 @@ describe('UsersService', () => {
     it('should delete the user partially', async () => {
       const user = await makeFakeUser(false, false, false, 'BadPassword');
 
-      expect(usersService.delete(user.id, false)).resolves.toBe(void 0);
+      const result = await usersService.delete(user.id, false);
+      expect(result).toBe(void 0);
+      expect(prismaService.users.update).toHaveBeenCalledWith({
+        where: { id: user.id, deleted_at: null },
+        data: { deleted_at: expect.any(Date) },
+      });
+    });
+    it('should delete the user partially (default GDPR value)', async () => {
+      const user = await makeFakeUser(false, false, false, 'BadPassword');
+
+      const result = await usersService.delete(user.id);
+      expect(result).toBe(void 0);
       expect(prismaService.users.update).toHaveBeenCalledWith({
         where: { id: user.id, deleted_at: null },
         data: { deleted_at: expect.any(Date) },
@@ -678,7 +732,8 @@ describe('UsersService', () => {
     it('should delete the user completely', async () => {
       const user = await makeFakeUser(false, false, false, 'BadPassword');
 
-      expect(usersService.delete(user.id, true)).resolves.toBe(void 0);
+      const result = await usersService.delete(user.id, true);
+      expect(result).toBe(void 0);
       expect(prismaService.users.delete).toHaveBeenCalledWith({
         where: { id: user.id },
       });
@@ -686,22 +741,38 @@ describe('UsersService', () => {
     it('should throw an error (user not found)', async () => {
       const invalidID = "surely it's an invalid ID";
 
-      prismaService.users.update.mockRejectedValueOnce(new NotFoundException());
-
-      expect(usersService.delete(invalidID, false)).rejects.toThrow(
-        NotFoundException,
+      prismaService.users.update.mockRejectedValueOnce(
+        new PrismaClientKnownRequestError('User not found', {
+          code: 'P2025',
+          clientVersion: 'NO_CLUE',
+        }),
       );
+
+      try {
+        await usersService.delete(invalidID, false);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(NotFoundException);
+      }
 
       expect(prismaService.users.update).toHaveBeenCalledWith({
         where: { id: invalidID, deleted_at: null },
         data: { deleted_at: expect.any(Date) },
       });
 
-      prismaService.users.delete.mockRejectedValueOnce(new NotFoundException());
-
-      expect(usersService.delete(invalidID, true)).rejects.toThrow(
-        NotFoundException,
+      prismaService.users.delete.mockRejectedValueOnce(
+        new PrismaClientKnownRequestError('User not found', {
+          code: 'P2025',
+          clientVersion: 'NO_CLUE',
+        }),
       );
+
+      try {
+        await usersService.delete(invalidID, true);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(NotFoundException);
+      }
 
       expect(prismaService.users.delete).toHaveBeenCalledWith({
         where: { id: invalidID },
@@ -709,12 +780,13 @@ describe('UsersService', () => {
     });
   });
 
-  describe('User resore', () => {
+  describe('User restore', () => {
     it('should restore a deleted user', async () => {
       const user = await makeFakeUser(false, false, true, 'BadPassword');
 
       prismaService.users.update.mockResolvedValue({} as any);
-      expect(usersService.restore(user.id)).resolves.toBe(void 0);
+      const result = await usersService.restore(user.id);
+      expect(result).toBe(void 0);
       expect(prismaService.users.update).toHaveBeenCalledWith({
         where: { id: user.id },
         data: { deleted_at: null },
@@ -724,14 +796,42 @@ describe('UsersService', () => {
     it('should throw an error (user not found)', async () => {
       const invalidID = 'bad user ID';
 
-      prismaService.users.update.mockRejectedValueOnce(new NotFoundException());
-      expect(usersService.restore(invalidID)).rejects.toThrow(
-        NotFoundException,
+      prismaService.users.update.mockRejectedValueOnce(
+        new PrismaClientKnownRequestError('User not found', {
+          code: 'P2025',
+          clientVersion: 'NO_CLUE',
+        }),
       );
+      try {
+        await usersService.restore(invalidID);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(NotFoundException);
+      }
       expect(prismaService.users.update).toHaveBeenCalledWith({
         where: { id: invalidID },
         data: { deleted_at: null },
       });
+    });
+  });
+
+  describe('error handler', () => {
+    it('should return an error which is not P2025', async () => {
+      prismaService.users.findUnique.mockResolvedValueOnce(
+        await makeFakeUser(false, false, false, 'password'),
+      );
+      prismaService.users.update.mockRejectedValueOnce(
+        new PrismaClientKnownRequestError('Unexpected error', {
+          code: 'P1000',
+          clientVersion: 'NO_CLUE',
+        }),
+      );
+      try {
+        await usersService.update('id', { current_password: 'password' });
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(PrismaClientKnownRequestError);
+      }
     });
   });
 });

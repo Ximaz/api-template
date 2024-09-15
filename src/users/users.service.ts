@@ -20,8 +20,15 @@ export class UsersService {
   ) {}
 
   private static errorHandler(e: any) {
-    if (e instanceof PrismaClientKnownRequestError && 'P2025' === e.code)
-      return new NotFoundException('User not found.');
+    if (e instanceof PrismaClientKnownRequestError) {
+      if ('P2025' === e.code) return new NotFoundException('User not found.');
+      if ('P2002' === e.code) {
+        const field = e.message.split(/\s/).slice(-1)[0];
+        return new ForbiddenException(
+          `${field[0].toUpperCase() + field.slice(1).toLowerCase()} is already taken.`,
+        );
+      }
+    }
     return e;
   }
 
@@ -78,17 +85,21 @@ export class UsersService {
   async create(createUserDto: CreateUserDto) {
     if (!createUserDto.has_accepted_terms_and_conditions)
       throw new ForbiddenException('User must accept terms and conditions.');
-    return await this.prismaService.users.create({
-      data: {
-        email: createUserDto.email,
-        hashed_password: createUserDto.hashed_password,
-        firstname: createUserDto.firstname,
-        lastname: createUserDto.lastname,
-      },
-      select: {
-        id: true,
-      },
-    });
+    try {
+      return await this.prismaService.users.create({
+        data: {
+          email: createUserDto.email,
+          hashed_password: createUserDto.hashed_password,
+          firstname: createUserDto.firstname,
+          lastname: createUserDto.lastname,
+        },
+        select: {
+          id: true,
+        },
+      });
+    } catch (e) {
+      throw UsersService.errorHandler(e);
+    }
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
@@ -125,16 +136,20 @@ export class UsersService {
       );
     }
 
-    return await this.prismaService.users.update({
-      where: { id },
-      data: updatedUser,
-      select: {
-        email: true,
-        firstname: true,
-        lastname: true,
-        updated_at: true,
-      },
-    });
+    try {
+      return await this.prismaService.users.update({
+        where: { id },
+        data: updatedUser,
+        select: {
+          email: true,
+          firstname: true,
+          lastname: true,
+          updated_at: true,
+        },
+      });
+    } catch (e) {
+      throw UsersService.errorHandler(e);
+    }
   }
 
   async delete(id: string, gdprCompliance: boolean = false): Promise<void> {
